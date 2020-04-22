@@ -9,3 +9,6 @@
 
 # Pycharm idea definitions:
 .idea/
+
+# Data folder:
+data/
