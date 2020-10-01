@@ -12,3 +12,13 @@
 
 # Data folder:
 data/
+
+# Excel and csv files:
+*.csv
+*.xlsx
+*.html
+*.record
+*.png
+checkpoints/
+tensorboard/
+model_outputs/

@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from ecg_medical_research.data_reader import decode_dcom_files
 from ecg_medical_research.data_reader import patient
 
-dicom_file_path = 'ecg_medical_research/data/demo_data/ECGSample.dcm'
+dicom_file_path = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data/samples/r_E00150420181109.dcm'
 #
 # source = BytesIO(open(dicom_file_path, mode='rb').read())
 # e = ECG(source)
@@ -52,3 +52,5 @@ p.print_info()
 sigs = p.get_signals()
 
 print("Signals shape: ", sigs.shape)
+plt.plot(sigs[0][100:800])
+plt.show()

@@ -8,7 +8,7 @@ class Patient(object):
 
     Attributes:
         id: patient unique identifier.
-        signals: 12-lead ecg signals measured from the patient.
+        unfiltered_signals: 12-lead ecg signals measured from the patient.
         date: date that the ecg test was performed.
         sampling_frequency: ECG sampling frequency.
         number_of_samples: length of each ecg signal from each channel.

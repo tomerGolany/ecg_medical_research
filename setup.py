@@ -3,7 +3,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = ['pydicom', 'numpy', 'scipy', 'matplotlib']
+REQUIRED_PACKAGES = ['pydicom', 'numpy', 'scipy', 'matplotlib', 'pandas', 'torch']
 
 setup(name='ecg_medical_research',
       version='0.1',

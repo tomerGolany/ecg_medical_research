@@ -5,6 +5,7 @@ import pandas as pd
 from collections import defaultdict
 import argparse
 
+
 parser = argparse.ArgumentParser(description='Process data to csv.')
 parser.add_argument('--data_dir', type=str, help='Full path to a directory '
                                                'with .dcm files.')
