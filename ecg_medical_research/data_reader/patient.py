@@ -1,6 +1,6 @@
 """Module which defines a Patient who holds 12-lead-ECG signal and additional meta data."""
 from ecg_medical_research.data_reader import decode_dcom_files
-
+from ecg_medical_research.data_reader import subsampling
 
 class Patient(object):
     """Patient represents all the medical information within a single patient.
@@ -34,6 +34,7 @@ class Patient(object):
         self.decoded_dcom_obj = decoded_dcom
         self.birth_date = decoded_dcom.birth_date()
         self.date = decoded_dcom.date()
+        # self.sub_sampled_ecg = subsampling.subsample_ecg(self.filtered_signals)
         # self.date_time
 
     def print_info(self):

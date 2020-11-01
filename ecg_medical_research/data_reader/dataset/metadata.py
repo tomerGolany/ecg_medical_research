@@ -1,4 +1,13 @@
 
+
+EXCEL_DATASET_FILE = '../data_reader/dataset/full_dataset_with_see_below_2.csv'
+
+# DICOM_DIR = '/home/tomer.golany/dataset'
+DICOM_DIR = "/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/saar/new_data_filtered/dataset"
+
+# TEST_SET_FILE = '../data_reader/excel_files/test_set_v2.xlsx'
+TEST_SET_FILE = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/excel_files/test_set_v2.xlsx'
+
 HEALTHY_35 = ['moderate dysfunction',
               '35-40 moderate dysfunction',
               '35-40% moderate dysfunction',

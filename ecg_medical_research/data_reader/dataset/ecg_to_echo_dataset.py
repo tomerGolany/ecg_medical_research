@@ -4,16 +4,27 @@ import os
 from ecg_medical_research.data_reader import patient
 import numpy as np
 from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
 from ecg_medical_research.data_reader import parse_ecg_echo_excel
 from ecg_medical_research.data_reader.dataset import metadata
 from ecg_medical_research.evaluation import quality
 import enum
+import logging
+from torch.utils.data import DataLoader
+
+
+EXCEL_DATASET_FILE = '../data_reader/dataset/full_dataset_with_see_below_2.csv'
+
+DICOM_DIR = '/home/tomer.golany/dataset'
+DICOM_DIR = "/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/saar/new_data_filtered/dataset"
+
+BLANK_ECGS_CSV = "/home/tomer.golany/ecg_medical_research/ecg_medical_research/data_reader/dataset/blank_ecgs.csv"
+BLANK_ECGS_CSV = "/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/dataset/blank_ecgs.csv"
 
 class TestType(enum.Enum):
     ALL_TEST = 1
     ONLY_PERFECT = 2
-    WITHOUT_ARTIFACTS =3
+    WITHOUT_ARTIFACTS = 3
+
 
 def collate_fn_simetric_padding(batch):
     """Pad element symmetrically.
@@ -21,10 +32,10 @@ def collate_fn_simetric_padding(batch):
     :param batch: List of samples from ECGToEchoDataset
     :return: matrix of the values.
     """
-    ecg_signals = [sample['ecg_signal_filterd'] for sample in batch]  # Shape of each signal: [12, L]
+    ecg_signals = [sample['ecg_signal_filtered'] for sample in batch]  # Shape of each signal: [12, L]
     lengths = [e.size()[1] for e in ecg_signals]
-    max_length = max(lengths)
-    # max_length = 10000
+    # max_length = max(lengths)
+    max_length = 10000
     padded_signals = []
     for ecg_signal, length in zip(ecg_signals, lengths):
         if length < max_length:
@@ -36,8 +47,24 @@ def collate_fn_simetric_padding(batch):
         else:
             padded_signals.append(ecg_signal)
     labels = [b['echo'] for b in batch]
-    return {'ecg_signal_filterd': torch.stack(padded_signals), 'echo': torch.stack(labels)}
+    ages = [b['age'] for b in batch]
+    number_of_samples = [b['number_of_samples'] for b in batch]
+    sampling_rate = [b['sampling_rate'] for b in batch]
+    gender = [b['gender'] for b in batch]
+    duration = [b['duration'] for b in batch]
 
+    dicom_files = [b['dicom_file'] for b in batch]
+    if 'ecg_number' in batch[0]:
+        ecg_numbers = [b['ecg_number'] for b in batch]
+        return {'ecg_signal_filtered': torch.stack(padded_signals), 'echo': torch.stack(labels),
+            'ecg_number': torch.stack(ecg_numbers), "dicom_file": dicom_files, 'age': ages,
+                'number_of_samples': number_of_samples, 'sampling_rate': sampling_rate,
+                'gender': gender, 'duration': duration}
+    else:
+        return {'ecg_signal_filtered': torch.stack(padded_signals), 'echo': torch.stack(labels),
+                "dicom_file": dicom_files, 'age': ages,
+                'number_of_samples': number_of_samples, 'sampling_rate': sampling_rate,
+                'gender': gender, 'duration': duration}
 
 def fill_see_below(full_dataset_csv, see_below_excel):
     full_df = pd.read_csv(full_dataset_csv)
@@ -72,17 +99,27 @@ class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
-        return {k: (torch.from_numpy(v) if type(v) == np.ndarray else torch.tensor(v)) for k, v in sample.items()}
+        d = {}
+        for k, v in sample.items():
+            if type(v) == np.ndarray:
+                d[k] = torch.from_numpy(v).float()
+            elif type(v) == str:
+                d[k] = v
+            elif type(v) == patient.Patient:
+                d[k] = v
+            else:
+                d[k] = torch.tensor(v)
+        return d
 
 
 def validate_dicom_and_excel(annotations_df, dicom_files):
-    print("Reading Excel file:")
-    print("Number of lines: ", len(annotations_df))
-    print("Number of unique dicom files in excel: ", len(annotations_df['file name'].unique()))
-    print("Reading dicom files:")
-    print("Number of dicom files: ", len(dicom_files))
-    print("Number of dicom files that exist in the excel file: ", len(annotations_df[annotations_df['file name'].isin(
-        dicom_files)]))
+    logging.info("Parsing Excel dataset file...")
+    logging.info("Number of lines: %d", len(annotations_df))
+    logging.info("Number of unique dicom files in excel: %d", len(annotations_df['file name'].unique()))
+    logging.info("Reading dicom files...")
+    logging.info("Number of dicom files: %d", len(dicom_files))
+    logging.info("Number of dicom files that exist in the excel file: %d",
+                 len(annotations_df[annotations_df['file name'].isin(dicom_files)]))
     return annotations_df[annotations_df['file name'].isin(dicom_files)]
 
 
@@ -112,8 +149,8 @@ class ECGToEchoDataset(Dataset):
         # self.filter_see_below()
         print("After filtering: ", len(self.annotations_df))
         # Filter test set:
-        test_set_path = '../data_reader/excel_files/test_set_v2.xlsx'
-        # test_set_path = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/excel_files/test_set_v2.xlsx'
+        # test_set_path = '../data_reader/excel_files/test_set_v2.xlsx'
+        test_set_path = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/excel_files/test_set_v2.xlsx'
         test_set_df = pd.read_excel(test_set_path)
 
         test_set_df['ecg_number'] = test_set_df.index.map(lambda x: x + 1)
@@ -137,6 +174,14 @@ class ECGToEchoDataset(Dataset):
             self.annotations_df = self.split(name=split_name)
         self.transform = transform
         print("Final length: ", len(self.annotations_df))
+
+        print("Filtering blank ECGS:")
+        self.filter_blank_ecgs()
+        print("Length after filtering: ", len(self.annotations_df))
+
+    def filter_blank_ecgs(self):
+        blank_ecgs_df = pd.read_csv(BLANK_ECGS_CSV)
+        self.annotations_df = self.annotations_df[~self.annotations_df['file name'].isin(blank_ecgs_df['dicom_file'])]
 
     def filter_samples(self):
         self.annotations_df = self.annotations_df[self.annotations_df.num_samples == 5499]
@@ -187,9 +232,12 @@ class ECGToEchoDataset(Dataset):
                 if label_str not in metadata.SICK_35:
                     raise AssertionError(f"{label_str}")
                 echo_result = 0
-        sample = {'ecg_signal_unfiltered': patient_obj.unfiltered_signals,
-                  'ecg_signal_filterd': patient_obj.filtered_signals,
-                  'echo': echo_result}
+        sample = {# 'ecg_signal_unfiltered': patient_obj.unfiltered_signals,
+                  # 'ecg_signal_filtered': patient_obj.filtered_signals,
+                  'ecg_signal_filtered': patient_obj.sub_sampled_ecg,
+                  'echo': echo_result,
+                  'dicom_file': self.annotations_df['file name'].iloc[idx]}
+        # print(sample['ecg_signal_filtered'].shape)
         if self.transform:
             sample = self.transform(sample)
 
@@ -207,12 +255,45 @@ if __name__ == "__main__":
     #     print(i_batch, sample_batched['ecg_signal_filterd'].size(),
     #           sample_batched['echo'].size(), sample_batched['echo'])
 
-    full_dataset_csv = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/dataset/dataset_full_details.csv'
-    see_below_excel = '/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/saar/excel_files/echo-ecg-see-below.xlsx.xlsx'
-    fill_see_below(full_dataset_csv, see_below_excel)
+    # full_dataset_csv = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/dataset/dataset_full_details.csv'
+    # see_below_excel = '/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/saar/excel_files/echo-ecg-see-below.xlsx.xlsx'
+    # fill_see_below(full_dataset_csv, see_below_excel)
     # ds = ECGToEchoDataset(
     #     excel_path=full_dataset_csv, dicom_dir='/Users/tomer.golany/Desktop/ecg_tweleve_lead'
     #                                                          '_research/saar/new_data_filtered/dataset',transform=ToTensor(), threshold_35=True)
     # for x in ds:
     #     print(x)
     #     break
+
+    excel_file = '/Users/tomer.golany/PycharmProjects/ecg_medical_research/ecg_medical_research/data_reader/dataset/full_dataset_with_see_below_2.csv'
+    dicom_dir = '/Users/tomer.golany/Desktop/ecg_tweleve_lead_research/saar/new_data_filtered/dataset'
+    train_ecg_dataset = ECGToEchoDataset(excel_path=excel_file, dicom_dir=dicom_dir,
+                                                             split_name='test',
+                                                             transform=ToTensor(),
+                                                             threshold_35=False)
+    import datetime
+
+
+    # i = 0
+    # dates = []
+    # for data in train_ecg_dataset:
+    #     i +=1
+    #     patient_obj = data['patient_obj']
+    #     date_str = patient_obj.date
+    #     date_time_obj = datetime.datetime.strptime(date_str, '%d %b %Y %H:%M')
+    #     print(date_time_obj)
+    #     dates.append(date_time_obj)
+    #
+    # print(max(dates))
+
+    df = pd.read_csv(excel_file)
+    print(df['date'].max())
+
+    import matplotlib.pyplot as plt
+    train_ecg_dataset.annotations_df['delta_days'].hist(bins=180)
+    plt.show()
+    print(train_ecg_dataset.annotations_df['delta_days'].value_counts())
+
+
+
+
